@@ -54,10 +54,87 @@ public class TwoQCache<K, V> {
         this.maxSizeHot = Math.round(maxSize * 0.2f); // 20%
     }
 
-    // TODO: добавить метод get. Такой же как в LRU
-    // 1. Берём ключ. Если hot содержит его, то кладём наверх очереди
-    // 2. Если не содержит, то проверяем в out. Если там есть, то добавляем в hot.
-    // 2.1. Надо проверить, что не привысили размер. Отдельная функция
+    /**
+     * Returns the value on the key. If the key is found, the container is changed.
+     * If the key is not found, null is returned.
+     *
+     * @param key key by which the value is selected
+     * @return Value by key or null
+     * @throws NullPointerException if key is null
+     */
+    public V get(K key) {
+        if (key == null) {
+            throw new NullPointerException("key cannot is null");
+        }
 
-    // TODO: добавить метод проверки на достижение максимального размера
+        synchronized (this) {
+            V mapValue =  generalCache.get(key);
+            if (mapValue != null) {
+                replaceContainersPositions(key);
+            }
+            return mapValue;
+        }
+    }
+
+    private void replaceContainersPositions(K key) {
+        if (containerHot.contains(key)) {
+            replaceContainerHotHead(key);
+        } else {
+            if (containerOut.contains(key)) {
+                addToContainerHot(key);
+                trimContainerHot();
+                removeFromContainerOut(key);
+            }
+        }
+    }
+
+    private void replaceContainerHotHead(K key) {
+        containerHot.remove(key);
+        containerHot.add(key);
+    }
+
+    private void addToContainerHot(K key) {
+        containerHot.add(key);
+        sizeHot++;
+    }
+
+    private void removeFromContainerHot(K key) {
+        containerHot.remove(key);
+        sizeHot--;
+    }
+
+    private void removeFromContainerOut(K key) {
+        sizeOut--;
+        containerOut.remove(key);
+    }
+
+    /**
+     * As long as the container size is not smaller than the maximum, removes items from the cache.
+     */
+    public void trimContainerHot() {
+        while (true) {
+            K key;
+
+            synchronized (this) {
+                if (sizeOut < 0 || (containerOut.isEmpty() && sizeHot != 0)) {
+                    throw new IllegalStateException(getClass().getName() + ".sizeOf() is contains inconsistent results");
+                }
+
+                if (isCorrectSizeContainerHot()) {
+                    break;
+                }
+
+                key = containerHot.iterator().next();
+                removeFromContainerHot(key);
+
+                generalCache.remove(key);
+            }
+        }
+    }
+
+    private boolean isCorrectSizeContainerHot() {
+        return sizeHot <= maxSizeHot || containerHot.isEmpty();
+    }
+
+
 }
