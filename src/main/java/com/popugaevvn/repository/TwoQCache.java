@@ -33,10 +33,8 @@ public class TwoQCache<K, V> {
     private int maxSizeOut;
     private int maxSizeHot;
 
-
-
     public TwoQCache(int maxSize) {
-        if (maxSize < 0) {
+        if (maxSize < 1) {
             throw new IllegalArgumentException("size cannot be smaller than 1");
         }
 
@@ -93,19 +91,100 @@ public class TwoQCache<K, V> {
         containerHot.add(key);
     }
 
-    private void addToContainerHot(K key) {
-        containerHot.add(key);
-        sizeHot++;
+    public V put(K key, V value) {
+        if (key == null || value == null) {
+            throw new NullPointerException("key and value cannot be null");
+        }
+
+        if (generalCache.containsKey(key)) {
+                return generalCache.put(key, value);
+        }
+
+        V result;
+        synchronized (this) {
+            boolean hasFreeSlot = addToFreeSlot(key);
+
+            if (hasFreeSlot) {
+                generalCache.put(key, value);
+                return value;
+            } else {
+                if (trimContainerIn()) {
+                    generalCache.put(key, value);
+                    addToContainerIn(key);
+                    result = value;
+                } else {
+                    generalCache.put(key, value);
+                    addToContainerHot(key);
+                    trimContainerHot();
+                    result = value;
+                }
+            }
+        }
+
+        return result;
     }
 
-    private void removeFromContainerHot(K key) {
-        containerHot.remove(key);
-        sizeHot--;
+    /**
+     * Deletes a value from the cache and all its containers.
+     *
+     * @param key key for deleting
+     * @return removed value
+     */
+    public V remove(K key) {
+        if (key == null) {
+            throw new NullPointerException("key is cannot be null");
+        }
+
+        V removedValue;
+        synchronized (this) {
+            removedValue = generalCache.remove(key);
+            if (removedValue != null) {
+                removeFromAllContainers(key);
+            }
+        }
+
+        return removedValue;
     }
 
-    private void removeFromContainerOut(K key) {
-        sizeOut--;
-        containerOut.remove(key);
+    private void removeFromAllContainers(K key) {
+        if (containerIn.contains(key)) {
+            removeFromContainerIn(key);
+        }
+
+        if (containerOut.contains(key)) {
+            removeFromContainerOut(key);
+        }
+
+        if (containerHot.contains(key)) {
+            removeFromContainerHot(key);
+        }
+    }
+
+    /**
+     * If one of the containers has free space, it adds an item to it and returns true.
+     * Otherwise it returns false.
+     * @param key key for adding to container
+     * @return true if key was added to container, else false
+     */
+    private boolean addToFreeSlot(K key) {
+        boolean wasAddedToContainer = false;
+
+        if ((maxSizeIn >= sizeIn + 1)) {
+            addToContainerIn(key);
+            wasAddedToContainer = true;
+        }
+
+        if (!wasAddedToContainer && (maxSizeOut >= sizeOut + 1)) {
+            addToContainerOut(key);
+            wasAddedToContainer = true;
+        }
+
+        if (!wasAddedToContainer && (maxSizeHot >= sizeHot + 1)) {
+            addToContainerHot(key);
+            wasAddedToContainer = true;
+        }
+
+        return wasAddedToContainer;
     }
 
     /**
@@ -132,9 +211,98 @@ public class TwoQCache<K, V> {
         }
     }
 
+    /**
+     * If there is space in the In container, one of its values is put on top.
+     * If there is no space in the In container, one of its values is removed from
+     * In container and moved to Out container.
+     *
+     * @return true if in `In` container have a space, else false
+     */
+    public boolean trimContainerIn() {
+        boolean result = false;
+        if (maxSizeIn < 1) {
+            return false;
+        }
+
+        while (containerIn.iterator().hasNext()) {
+            K keyIn = containerIn.iterator().next();
+
+            if (isCorrectSizeContainerIn()) {
+                result = true;
+                break;
+            } else {
+                replaceFromInToOut(keyIn);
+            }
+        }
+        return result;
+    }
+
+    private void replaceFromInToOut(K key) {
+        removeFromContainerIn(key);
+
+        while (containerOut.iterator().hasNext()) {
+            if (isCorrectSizeContainerOut()) {
+                addToContainerOut(key);
+                break;
+            } else {
+                K keyOut = containerOut.iterator().next();
+                removeFromContainerOut(keyOut);
+            }
+        }
+    }
+
+    // ================== Support functions =====================
+    // ======================== add =============================
+    private void addToContainerIn(K key) {
+        containerIn.add(key);
+        sizeIn++;
+    }
+
+    private void addToContainerOut(K key) {
+        containerOut.add(key);
+        sizeOut++;
+    }
+
+    private void addToContainerHot(K key) {
+        containerHot.add(key);
+        sizeHot++;
+    }
+
+    // ======================== remove ==========================
+    private void removeFromContainerIn(K key) {
+        containerIn.remove(key);
+        sizeIn--;
+    }
+
+    private void removeFromContainerOut(K key) {
+        containerOut.remove(key);
+        sizeOut--;
+    }
+
+    private void removeFromContainerHot(K key) {
+        containerHot.remove(key);
+        sizeHot--;
+    }
+
+    // ======================== correct size ==========================
+    private boolean isCorrectSizeContainerIn() {
+        return (sizeIn + 1 <= maxSizeIn) || containerIn.isEmpty();
+    }
+
+    private boolean isCorrectSizeContainerOut() {
+        return sizeOut + 1 <= maxSizeOut || containerOut.isEmpty();
+    }
+
     private boolean isCorrectSizeContainerHot() {
         return sizeHot <= maxSizeHot || containerHot.isEmpty();
     }
 
-
+    @Override
+    public synchronized final String toString() {
+        return new StringBuilder()
+                .append("Container In: ").append(containerIn)
+                .append("\nContainer Out: ").append(containerOut)
+                .append("\nContainer Hot: ").append(containerHot)
+                .toString();
+    }
 }
