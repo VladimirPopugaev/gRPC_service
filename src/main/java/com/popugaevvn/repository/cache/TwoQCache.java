@@ -1,11 +1,11 @@
-package com.popugaevvn.repository;
+package com.popugaevvn.repository.cache;
 
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 // TODO: добавить интерфейс, чтоб можно было изменить реализацию в какой-то момент
-public class TwoQCache<K, V> {
+public class TwoQCache<K, V> implements Cache<K, V> {
 
     /**
      * Primary in memory repository
@@ -60,6 +60,7 @@ public class TwoQCache<K, V> {
      * @return Value by key or null
      * @throws NullPointerException if key is null
      */
+    @Override
     public V get(K key) {
         if (key == null) {
             throw new NullPointerException("key cannot is null");
@@ -91,6 +92,7 @@ public class TwoQCache<K, V> {
         containerHot.add(key);
     }
 
+    @Override
     public V put(K key, V value) {
         if (key == null || value == null) {
             throw new NullPointerException("key and value cannot be null");
@@ -130,6 +132,7 @@ public class TwoQCache<K, V> {
      * @param key key for deleting
      * @return removed value
      */
+    @Override
     public V remove(K key) {
         if (key == null) {
             throw new NullPointerException("key is cannot be null");

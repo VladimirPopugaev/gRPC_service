@@ -1,8 +1,0 @@
-syntax = "proto3";
-package com.popugaevvn.grpc;
-
-message HelloRequest {
-
-  string name = 1;
-
-}
